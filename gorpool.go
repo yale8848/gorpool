@@ -71,6 +71,7 @@ func newDispatcher(workerPool chan *worker, jobQueue chan Job) *dispatcher {
 	return &dispatcher{workerPool: workerPool, jobQueue: jobQueue, stop: make(chan struct{})}
 }
 //workerNum is worker number of worker pool,on worker have one goroutine
+//
 //jobNum is job number of job pool
 func NewPool(workerNum, jobNum int) *Pool {
 	workers := make(chan *worker, workerNum)
