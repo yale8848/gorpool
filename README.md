@@ -22,7 +22,8 @@ import (
 
 func main() {
 
-	p := gorpool.NewPool(5, 10).Start()
+	p := gorpool.NewPool(5, 10).//workerNum is worker number of goroutine pool ,one worker have one goroutine ,jobNum is job number of job pool
+		Start()
 	defer p.StopAll()
 	for i := 0; i < 100; i++ {
 		count := i
@@ -37,7 +38,7 @@ func main() {
 
 ```
 
-## Wait
+## WaitForAll
 
 ```go
 
@@ -66,5 +67,9 @@ func main() {
 }
 
 ```
+
+## Doc
+
+[gorpool doc](https://godoc.org/github.com/yale8848/gorpool)
 
 

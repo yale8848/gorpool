@@ -5,7 +5,9 @@ import (
 	"sync"
 )
 
+//Job function
 type Job func()
+
 type worker struct {
 	workerPool chan *worker
 	jobQueue   chan Job
@@ -30,6 +32,8 @@ func newWorker(workerPool chan *worker) *worker {
 		stop:       make(chan struct{}),
 	}
 }
+
+//one worker start to work
 func (w *worker) start() {
 	for {
 		w.workerPool <- w
@@ -45,6 +49,7 @@ func (w *worker) start() {
 
 }
 
+//Dispatch job to free worker
 func (dis *dispatcher) dispatch() {
 	for {
 		select {
@@ -65,7 +70,8 @@ func (dis *dispatcher) dispatch() {
 func newDispatcher(workerPool chan *worker, jobQueue chan Job) *dispatcher {
 	return &dispatcher{workerPool: workerPool, jobQueue: jobQueue, stop: make(chan struct{})}
 }
-
+//workerNum is worker number of worker pool,on worker have one goroutine
+//jobNum is job number of job pool
 func NewPool(workerNum, jobNum int) *Pool {
 	workers := make(chan *worker, workerNum)
 	jobs := make(chan Job, jobNum)
@@ -78,6 +84,7 @@ func NewPool(workerNum, jobNum int) *Pool {
 	return pool
 
 }
+//Add one job to job pool
 func (p *Pool) AddJob(job Job) {
 	if p.enableWaitForAll {
 		p.wg.Add(1)
@@ -101,10 +108,14 @@ func (p *Pool) StopAll() {
 	p.dispatcher.stop <- struct{}{}
 	<-p.dispatcher.stop
 }
+
+//Enable whether enable WaitForAll
 func (p *Pool) EnableWaitForAll(enable bool) *Pool {
 	p.enableWaitForAll = enable
 	return p
 }
+
+//Start worker pool and dispatch
 func (p *Pool) Start() *Pool {
 
 	for i := 0; i < cap(p.dispatcher.workerPool); i++ {
