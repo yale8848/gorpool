@@ -22,7 +22,9 @@ import (
 
 func main() {
 
-	p := gorpool.NewPool(5, 10).//workerNum is worker number of goroutine pool ,one worker have one goroutine ,jobNum is job number of job pool
+    // workerNum is worker number of goroutine pool ,one worker have one goroutine ,
+    // jobNum is job number of job pool
+	p := gorpool.NewPool(5, 10).
 		Start()
 	defer p.StopAll()
 	for i := 0; i < 100; i++ {

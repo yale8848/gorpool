@@ -8,9 +8,6 @@ import (
 	"time"
 )
 
-func init() {
-
-}
 func TestNewPool(t *testing.T) {
 	p := NewPool(5, 10).Start()
 	defer p.StopAll()
@@ -25,7 +22,8 @@ func TestNewPool(t *testing.T) {
 	time.Sleep(2 * time.Second)
 }
 func TestPool_EnableWaitForAll(t *testing.T) {
-	p := NewPool(5, 10).Start().EnableWaitForAll(true)
+	p := NewPool(5, 10).Start().
+		EnableWaitForAll(true)
 	for i := 0; i < 100; i++ {
 		count := i
 		p.AddJob(func() {
@@ -39,7 +37,8 @@ func TestPool_EnableWaitForAll(t *testing.T) {
 
 func TestPool_StopAll(t *testing.T) {
 	rnum := runtime.NumGoroutine()
-	p := NewPool(5, 10).Start().EnableWaitForAll(true)
+	p := NewPool(5, 10).Start().
+		EnableWaitForAll(true)
 	defer func() {
 		p.StopAll()
 		if rnum != runtime.NumGoroutine() {
