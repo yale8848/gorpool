@@ -17,6 +17,9 @@ type Pool struct {
 	dispatcher       *dispatcher
 	wg               sync.WaitGroup
 	enableWaitForAll bool
+	workerNum int
+	jobNum int
+	workerCount int
 }
 type dispatcher struct {
 	workerPool chan *worker
@@ -80,21 +83,30 @@ func NewPool(workerNum, jobNum int) *Pool {
 	pool := &Pool{
 		dispatcher:       newDispatcher(workers, jobs),
 		enableWaitForAll: false,
+		workerNum:workerNum,
+		jobNum:jobNum,
 	}
 
 	return pool
 
 }
+
 //Add one job to job pool
 func (p *Pool) AddJob(job Job) {
 	if p.enableWaitForAll {
 		p.wg.Add(1)
 	}
-
 	p.dispatcher.jobQueue <- func() {
 		job()
 		if p.enableWaitForAll {
 			p.wg.Done()
+		}
+	}
+	if len(p.dispatcher.jobQueue) >0{
+		if p.workerCount < p.workerNum {
+			worker := newWorker(p.dispatcher.workerPool)
+			go worker.start()
+			p.workerCount++
 		}
 	}
 }
@@ -118,12 +130,6 @@ func (p *Pool) EnableWaitForAll(enable bool) *Pool {
 
 //Start worker pool and dispatch
 func (p *Pool) Start() *Pool {
-
-	for i := 0; i < cap(p.dispatcher.workerPool); i++ {
-		worker := newWorker(p.dispatcher.workerPool)
-		go worker.start()
-	}
 	go p.dispatcher.dispatch()
-
 	return p
 }

@@ -21,6 +21,8 @@ func TestNewPool(t *testing.T) {
 	}
 	time.Sleep(2 * time.Second)
 }
+
+
 func TestPool_EnableWaitForAll(t *testing.T) {
 	p := NewPool(5, 10).Start().
 		EnableWaitForAll(true)
@@ -28,7 +30,7 @@ func TestPool_EnableWaitForAll(t *testing.T) {
 		count := i
 		p.AddJob(func() {
 			time.Sleep(10 * time.Millisecond)
-			fmt.Printf("%d\r\n", count)
+			fmt.Printf(" %d\r\n",count)
 		})
 	}
 	p.WaitForAll()
