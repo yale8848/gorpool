@@ -3,25 +3,31 @@ package gorpool
 
 import (
 	"fmt"
+	"math/rand"
 	"runtime"
 	"testing"
 	"time"
 )
 
 func TestNewPool(t *testing.T) {
-	p := NewPool(5, 10).Start()
+	rn := rand.New(rand.NewSource(time.Now().UnixNano()))
+	p := NewPool(3, 10).SetIdleDuration(1 * time.Second).Start()
 	defer p.StopAll()
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10; i++ {
 		count := i
 		p.AddJob(func() {
-			time.Sleep(10 * time.Millisecond)
-			fmt.Printf("%d\r\n", count)
+			time.Sleep(1 * time.Second)
+			fmt.Printf("v %d\r\n", count)
 		})
-
+		p.AddJob(func() {
+			time.Sleep(1 * time.Second)
+			fmt.Printf("v %d\r\n", count+100)
+		})
+		time.Sleep(time.Duration(rn.Intn(3)) * time.Second)
+		fmt.Printf("w %d\r\n", p.WorkerLength())
 	}
-	time.Sleep(2 * time.Second)
+	time.Sleep(60 * time.Second)
 }
-
 
 func TestPool_EnableWaitForAll(t *testing.T) {
 	p := NewPool(5, 10).Start().
@@ -30,7 +36,7 @@ func TestPool_EnableWaitForAll(t *testing.T) {
 		count := i
 		p.AddJob(func() {
 			time.Sleep(10 * time.Millisecond)
-			fmt.Printf(" %d\r\n",count)
+			fmt.Printf(" %d\r\n", count)
 		})
 	}
 	p.WaitForAll()
@@ -38,11 +44,13 @@ func TestPool_EnableWaitForAll(t *testing.T) {
 }
 
 func TestPool_StopAll(t *testing.T) {
+	rn := rand.New(rand.NewSource(time.Now().UnixNano()))
 	rnum := runtime.NumGoroutine()
-	p := NewPool(5, 10).Start().
+	p := NewPool(5, 10).SetIdleDuration(3 * time.Second).Start().
 		EnableWaitForAll(true)
 	defer func() {
 		p.StopAll()
+
 		if rnum != runtime.NumGoroutine() {
 			t.Error("Goroutine not stop")
 		} else {
@@ -52,7 +60,7 @@ func TestPool_StopAll(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		count := i
 		p.AddJob(func() {
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(time.Duration(rn.Intn(5)) * time.Second)
 			fmt.Printf("%d\r\n", count)
 		})
 	}

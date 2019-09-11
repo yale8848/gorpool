@@ -70,6 +70,40 @@ func main() {
 
 ```
 
+
+## SetIdleDuration
+
+After set idle duration , the worker will stop it worker go routine 
+
+```go
+
+package main
+
+import (
+	"fmt"
+	"github.com/yale8848/gorpool"
+	"time"
+)
+
+func main() {
+
+	p := gorpool.NewPool(5, 10).
+		SetIdleDuration(3 * time.Second).
+		Start().
+		EnableWaitForAll(true)
+	for i := 0; i < 100; i++ {
+		count := i
+		p.AddJob(func() {
+			time.Sleep(5 * time.Second)
+			fmt.Printf("%d\r\n", count)
+		})
+	}
+	p.WaitForAll()
+	p.StopAll()
+}
+
+```
+
 ## Doc
 
 [gorpool doc](https://godoc.org/github.com/yale8848/gorpool)
