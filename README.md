@@ -5,7 +5,7 @@ Simple Goroutine pool
 # How to use
 
 ```
-go get github.com/yale8848/gorpool
+go get github.com/yale8848/gorpool@v0.1.0
 ```
 
 ## Simple example
