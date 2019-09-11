@@ -46,12 +46,11 @@ func TestPool_EnableWaitForAll(t *testing.T) {
 func TestPool_StopAll(t *testing.T) {
 	rn := rand.New(rand.NewSource(time.Now().UnixNano()))
 	rnum := runtime.NumGoroutine()
-	p := NewPool(5, 10).SetIdleDuration(300 * time.Millisecond).Start().
+	p := NewPool(5, 10).SetIdleDuration(3 * time.Second).Start().
 		EnableWaitForAll(true)
 	defer func() {
 		p.StopAll()
 
-		time.Sleep(5 * time.Second)
 		if rnum != runtime.NumGoroutine() {
 			t.Error("Goroutine not stop")
 		} else {
@@ -61,10 +60,9 @@ func TestPool_StopAll(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		count := i
 		p.AddJob(func() {
-			time.Sleep(time.Duration(rn.Intn(300)) * time.Millisecond)
+			time.Sleep(time.Duration(rn.Intn(5)) * time.Second)
 			fmt.Printf("%d\r\n", count)
 		})
-		time.Sleep(time.Duration(rn.Intn(600)) * time.Millisecond)
 	}
 	p.WaitForAll()
 }

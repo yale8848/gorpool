@@ -2,24 +2,24 @@
 package gorpool
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
+const MaxTime = time.Hour * 24 * 365 * 100
+
 // Job function
 type Job func()
 
-type empty struct{}
-
 type worker struct {
-	workerPool  chan *worker
-	jobQueue    chan Job
-	stop        chan struct{}
-	idleTime    time.Duration
-	workerCount *int32
-	stopWork    int32
+	workerPool chan *worker
+	jobQueue   chan Job
+	stop       chan struct{}
+	idleTime   time.Duration
+
+	dis    *dispatcher
+	isStop bool
 }
 type Pool struct {
 	dispatcher       *dispatcher
@@ -32,25 +32,39 @@ type dispatcher struct {
 	stop        chan struct{}
 	idleTime    time.Duration
 	workerCount int32
-	workers     map[*worker]empty
+
+	locker sync.Mutex
 }
 
-func newWorker(workerPool chan *worker, idleTime time.Duration, workerCount *int32) *worker {
+func newWorker(workerPool chan *worker, idleTime time.Duration, dis *dispatcher) *worker {
 
 	return &worker{
-		workerPool:  workerPool,
-		jobQueue:    make(chan Job),
-		stop:        make(chan struct{}),
-		idleTime:    idleTime,
-		workerCount: workerCount,
+		workerPool: workerPool,
+		jobQueue:   make(chan Job),
+		stop:       make(chan struct{}, 1),
+		idleTime:   idleTime,
+		dis:        dis,
+	}
+}
+
+func (dis *dispatcher) startWorker() {
+
+	dis.locker.Lock()
+	defer dis.locker.Unlock()
+
+	if dis.workerCount < int32(cap(dis.workerPool)) {
+		dis.workerCount++
+		worker := newWorker(dis.workerPool, dis.idleTime, dis)
+		go worker.start()
 	}
 }
 
 // One worker start to work
 func (w *worker) start() {
+
 	var idTime = w.idleTime
 	if idTime <= 0 {
-		idTime = time.Hour * 24 * 365 * 100
+		idTime = MaxTime
 	}
 	tc := time.NewTimer(idTime)
 
@@ -58,34 +72,27 @@ func (w *worker) start() {
 		w.workerPool <- w
 		select {
 		case <-tc.C:
-			sw := atomic.CompareAndSwapInt32(&w.stopWork, 0, 1)
-			if sw {
-				atomic.AddInt32(w.workerCount, -1)
-				fmt.Println("stop worker success")
+
+			w.dis.locker.Lock()
+			if !w.isStop {
+				w.isStop = true
+				w.dis.workerCount--
 			} else {
-				fmt.Println("stop worker fail")
+				<-w.stop
 			}
+			w.dis.locker.Unlock()
+
 			return
 		case job := <-w.jobQueue:
-
 			job()
-			tc = time.NewTimer(idTime)
+			if idTime != MaxTime {
+				tc = time.NewTimer(idTime)
+			}
 		case <-w.stop:
-			fmt.Println("worker start w.stop ")
-			w.stop <- struct{}{}
 			return
 		}
 	}
 
-}
-
-func (dis *dispatcher) startWorker() {
-
-	if int(atomic.LoadInt32(&dis.workerCount)) < cap(dis.workerPool) {
-		atomic.AddInt32(&dis.workerCount, 1)
-		worker := newWorker(dis.workerPool, dis.idleTime, &dis.workerCount)
-		go worker.start()
-	}
 }
 
 // Dispatch job to free worker
@@ -94,43 +101,38 @@ func (dis *dispatcher) dispatch() {
 		select {
 		case job := <-dis.jobQueue:
 
-			for {
-				worker, ok := <-dis.workerPool
-				if !ok {
-					fmt.Println("dispatch  <-dis.workerPool ok false")
-					break
-				}
-
-				if _, ok := dis.workers[worker]; !ok {
-					dis.workers[worker] = empty{}
-				}
-				if worker.stopWork == 0 {
-					worker.jobQueue <- job
-					break
-				}
-				fmt.Println("dispatch  delete work")
-				delete(dis.workers, worker)
-				worker = nil
+			worker := <-dis.workerPool
+			if !worker.isStop {
+				worker.jobQueue <- job
+			} else {
+				dis.startWorker()
+				dis.jobQueue <- job
 			}
 
 		case <-dis.stop:
 
-			for v, _ := range dis.workers {
-				fmt.Println("dispatch  <-dis.stop  dis.workers")
-				if v != nil && atomic.CompareAndSwapInt32(&v.stopWork, 0, 1) {
-					fmt.Println("dispatch  <-dis.stop  CompareAndSwapInt32")
-					v.stop <- struct{}{}
-					<-v.stop
-				}
-			}
-			dis.stop <- struct{}{}
+			func() {
+				dis.locker.Lock()
+				defer dis.locker.Unlock()
 
+				wl := len(dis.workerPool)
+				for i := 0; i < wl; i++ {
+					worker := <-dis.workerPool
+					if !worker.isStop {
+						worker.isStop = true
+						worker.stop <- struct{}{}
+					}
+
+				}
+			}()
+			time.Sleep(100 * time.Millisecond)
+			dis.stop <- struct{}{}
 			return
 		}
 	}
 }
 func newDispatcher(workerPool chan *worker, jobQueue chan Job) *dispatcher {
-	return &dispatcher{workerPool: workerPool, jobQueue: jobQueue, stop: make(chan struct{}), workers: make(map[*worker]empty, 0)}
+	return &dispatcher{workerPool: workerPool, jobQueue: jobQueue, stop: make(chan struct{})}
 }
 
 // WorkerNum is worker number of worker pool,on worker have one goroutine
@@ -161,16 +163,15 @@ func (p *Pool) WorkerLength() int {
 	return 0
 }
 
-//Add one job to job pool
+// Add one job to job pool
 func (p *Pool) AddJob(job Job) {
 
 	p.dispatcher.startWorker()
 
-	if p.enableWaitForAll {
-		p.wg.Add(1)
-	}
 	p.dispatcher.jobQueue <- func() {
-
+		if p.enableWaitForAll {
+			p.wg.Add(1)
+		}
 		job()
 		if p.enableWaitForAll {
 			p.wg.Done()
@@ -179,25 +180,26 @@ func (p *Pool) AddJob(job Job) {
 
 }
 
+// Wait all job finish
 func (p *Pool) WaitForAll() {
 	if p.enableWaitForAll {
 		p.wg.Wait()
 	}
 }
 
+// Stop all worker
 func (p *Pool) StopAll() {
-	close(p.dispatcher.workerPool)
 	p.dispatcher.stop <- struct{}{}
 	<-p.dispatcher.stop
 }
 
-//Enable whether  WaitForAll
+// Enable whether  WaitForAll
 func (p *Pool) EnableWaitForAll(enable bool) *Pool {
 	p.enableWaitForAll = enable
 	return p
 }
 
-//Start worker pool and dispatch
+// Start worker pool and dispatch
 func (p *Pool) Start() *Pool {
 	go p.dispatcher.dispatch()
 	return p
